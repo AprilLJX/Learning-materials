@@ -267,3 +267,238 @@ If-Modified-Since: Wed, 21 Oct 2015 07:28:00 GMT
 ##### 内容协商
 
 返回最合适的内容，例如根据浏览器默认语言返回对应界面
+
+###### 类型
+
+1. 服务端驱动型
+   客户端设定特定HTTP首部字段，如Accept，Accept-Encoding，Accept-Language，服务器根据字段返回特定资源
+   存在问题：
+   服务器难以知道客户端浏览器全部信息
+   客户端提供信息冗长(HTTP/2首部压缩机制)，存在隐私风险(HTTP指纹识别技术)
+   给定资源需不同展现形式，共享缓存效率低，服务器端实现复杂
+2. 代理驱动型
+   服务器返回300 Multiple Choices 或者 406 Not Acceptable，客户端选择最佳
+
+###### Vary
+
+```
+Vary: Accept-Language
+```
+
+使用内容协商的情况下，只有当那个缓存服务器的缓存满足内容协商条件时，才使用该缓存，否则向源服务器请求该资源。
+如：一客户端发送一个包含Accept-Language首部字段的请求，源服务器返回响应包含Vary: Accept-Language，缓存服务器缓存该响应--->客户端下一次访问该URL资源时，Accept-Language 与缓存中的对应的值相同时才会返回该缓存。
+
+###### 内容编码
+
+压缩实体主体，减少传输数据量：gzip，compress，deflate，identity
+（1）浏览器发送Accept-Encoding首部，包含压缩算法及各自优先级。
+（2）服务器选择一种算法，对消息响应主体进行压缩，发送Content-Encoding告知浏览器选择的算法
+（3）该内容协商基于编码类型选择资源展现形式，响应报文的Vary首部字段至少要包含Content-Encoding
+
+###### 范围请求
+
+若网络中断，服务器只发送一部分数据，范围请求可使客户端只请求服务器未发送的那部分数据，避免重新发送所有数据
+1.Range 请求报文中添加，指定请求的范围
+
+```
+GET /z4d4kWk.jpg HTTP/1.1 
+Host: i.imgur.com 
+Range: bytes=0-1023
+```
+
+请求成功服务器返回响应包含206 Partial Content状态码
+
+```
+HTTP/1.1 206 Partial Content Content-Range: bytes 0-1023/146515 Content-Length: 1024 ...
+
+(binary content)
+```
+
+2.Accept-Ranges 告知客户端是否能处理范围请求，可以使用bytes，否则用none
+
+```
+Accept-Ranges: bytes
+```
+
+3.响应状态码
+
+```
+在请求成功的情况下，服务器会返回 206 Partial Content 状态码。 
+在请求的范围越界的情况下，服务器会返回 416 Requested Range Not Satisﬁable 状态码。
+在不支持范围请求的情况下，服务器会返回 200 OK 状态码。
+```
+
+###### 分块传输代码
+
+Chunked Transfer Encoding，可以把数据分割成多块，让浏览器逐步显示页面。
+
+###### 多部分对象集合
+
+ 报文主体可含有多种类型实体发送，各部分用boundary字段定义分隔符分割
+
+```
+Content-Type: multipart/form-data; boundary=AaB03x
+
+--AaB03x Content-Disposition: form-data; name="submit-name"
+
+Larry --AaB03x Content-Disposition: form-data; name="files"; filename="file1.txt" Content-Type: text/plain
+
+... contents of file1.txt ... --AaB03x--
+```
+
+###### 虚拟主机
+
+HTTP/1.1使用，一台服务器拥有多个域名，逻辑上为多个服务器
+
+###### 通信数据转发
+
+1.代理
+代理服务器接受客户端请求，转发给其他服务器
+代理目的：
+缓存；负载均衡；网络访问控制；访问日志记录
+正向代理：用户可察觉
+
+![image-20200224195934811](/Users/jacyn/Documents/study/Learning-materials/image/image-20200224195934811.png)
+
+反向代理：位于内部网络中，用户无法察觉
+
+![image-20200224195949418](/Users/jacyn/Documents/study/Learning-materials/image/image-20200224195949418.png)
+
+2.网关
+将HTTP转化为其他协议进行通信，从而请求其他非HTTP服务器的服务
+3.隧道
+使用SSL等加密手段，在客户端和服务器之间建立安全的通信网络
+
+##### HTTPS
+
+HTTP问题：
+1.明文通信，易被窃听
+2.不验证通信方身份，身份可能被伪装
+3.无法验证报文完整性，报文可能被篡改
+HTTPS：HTTP先和SSL(Secure Sockets Layer)通信，再有SSL和TCP通信--->即HTTPS使用隧道通信
+SSL：加密（防窃听），认证（防伪装），完整性保护（防篡改）
+
+###### 加密
+
+1.对称密码加密
+运算速度快
+无法安全地将密钥传输给通信方
+2.非对称加密
+加密，签名
+可以更安全的将公开密钥传输给通信发送方
+运算速度慢
+3.HTTPS加密方式--混合的加密机制
+非对称密钥加密传输对称密钥保证传输安全性
+对称密钥加密进行通信保证传输效率
+客户端生成对称密码，用服务器的公钥加密
+
+###### 认证---证书
+
+CA(certificate Authority)数字证书认证机构：可信第三方
+服务器向CA申请公钥，CA对其公钥进行签名，分配，绑定证书
+HTTPS通信时，服务器将证书发送给客户端，客户端取得公钥后，用数字签名进行验证。
+
+###### 完整性保护
+
+HTTP：MD5报文宅摘要，报文被修改后，重新计算MD5，客户端无法察觉
+HTTPS：结合加密和认证
+
+###### 缺点
+
+1.需要进行加解密，速度慢
+2.需要支付证书授权的高昂费用
+
+##### HTTP/2.0
+
+###### HTTP1.0 缺陷
+
+实现简单以牺牲性能为代价
+1.客户端需要使用多个连接才能实现并发和缩短延迟
+2.不会压缩请求和响应首部，导致不必要的网络流量
+3.不支持有效的资源优先级，使底层TCP连接的利用率低下
+
+###### 二进制分帧层
+
+报文分成HEADERS帧和DATA帧，二进制格式
+![image-20200224203625796](/Users/jacyn/Documents/study/Learning-materials/image/image-20200224203625796.png)
+
+通信时只有一个TCP连接存在，承载任意数量的双向数据流(Stream)
+1.一个数据流(Stream)有一个唯一标识符和可选的优先级信息，用于承载双向信息
+2.消息(Message)是与逻辑请求或响应对应的完整的一系列帧
+3.帧(Frame)是最小的通信单位，来自不同数据流的帧可以交错发送，再根据每个帧头的数据流标识符重新组装
+
+![image-20200224204852323](/Users/jacyn/Documents/study/Learning-materials/image/image-20200224204852323.png)
+
+###### 服务端推送
+
+HTTP/2.0 在客户端请求一个资源市场，服务器会把相关资源一起发送，客户端就不用再次发起请求
+如：客户端请求page.html，服务器发送script.js,style.css等相关资源
+
+###### 首部压缩
+
+HTTP/1.1 首部带有大量信息，且每次都重复发送
+HTTP/2.0 要求客户端与服务器同时维护和更新一个包含之前见过的首部字段表，避免重复传输
+且使用Huffman编码对首部字段压缩
+
+![image-20200224205324778](/Users/jacyn/Documents/study/Learning-materials/image/image-20200224205324778.png)
+
+##### HTTP/1.1新特性
+
+1.默认长连接
+2.支持流水线
+3.支持同时打开多个TCP连接
+4.支持虚拟主机
+5.新增状态码100
+6.支持分块传输编码
+7.新增缓存处理指令max-age
+
+##### GET和POST比较
+
+###### 作用
+
+get：获取资源
+post：传输实体主体
+
+###### 参数
+
+get：查询字符串出现在URL，只支持ASCII
+post：存储在实体主体，(照样可以通过抓包工具，比如Fiddler查看)，支持标准字符集
+
+```
+GET /test/demo_form.asp?name1=value1&name2=value2 HTTP/1.1
+
+POST /test/demo_form.asp HTTP/1.1 Host: w3schools.com name1=value1&name2=value2
+```
+
+###### 安全
+
+get安全
+post不安全，因为其可能是用户上传的表单数据，上传成功后，服务器该数据，可能使得数据库状态改变
+安全的方法：get，head，options
+不安全：post，put，delete
+
+###### 幂等性
+
+同样的请求被执行一次与执行多次效果一样，服务器状态也一样
+安全的都幂等
+不安全的delete是幂等的，即使不同请求接受到的状态码不同，因为删除一个之后再删除效果一样
+
+###### 可缓存
+
+对响应进行缓存：
+
+1. 请求报文的HTTP方法本身可缓存，包括GET和HEAD，put和delete不可缓存，post多数情况不可缓存
+2. 响应报文的状态码可缓存，如：200，203，204，206，300，301，404，405，410，414，501
+3. 响应报文的Cache-Control首部字段没有指定不进行缓存
+
+###### XMLHttpRequest
+
+一个API。客户端通过URL来获取数据的简单方式，网页只更新一部分内容，而不是整体刷新
+在AJAX中大量使用
+
+1. POST，浏览器先发送Jeader再发送Data。不是所有浏览器这样做
+2. GET方法将Header和Data一起发送
+
+Ajax 即“A synchronous Javascript And XML”（异步 JavaScript 和 XML），是指一种创建交互式、快速动态网页应用的网页开发技术，无需重新加载整个网页的情况下，能够更新部分网页的技术。
+
+通过在后台与服务器进行少量数据交换，Ajax 可以使网页实现异步更新。这意味着可以在不重新加载整个网页的情况下，对网页的某部分进行更新。
